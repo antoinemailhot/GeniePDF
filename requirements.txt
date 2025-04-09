@@ -1,0 +1,20 @@
+# Conversion de PDF en images
+pdf2image==1.16.3
+
+# Reconnaissance de texte via Tesseract-OCR
+pytesseract==0.3.10
+
+# Traitement d’images avec OpenCV
+opencv-python==4.7.0.72
+
+# Structuration et manipulation de données
+pandas==1.5.3
+
+# Extraction de contenu PDF (texte, images, métadonnées)
+PyMuPDF==1.22.1
+
+# Validation des données JSON avec JsonSchema
+jsonschema==4.17.3
+
+# Pour la validation des DTO (optionnel si ont a du temps.)
+pydantic==1.10.2
