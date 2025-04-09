@@ -1,3 +1,8 @@
+# Comment installer les requirements :
+# python -m venv .venv
+# source .venv/bin/activate  OU .venv\Scripts\activate sur Windows
+# pip install -r requirements.txt
+
 # Conversion de PDF en images
 pdf2image==1.16.3
 
@@ -17,4 +22,7 @@ PyMuPDF==1.22.1
 jsonschema==4.17.3
 
 # Pour la validation des DTO (optionnel si ont a du temps.)
-pydantic==1.10.2
+#pydantic==1.10.2
+
+# Pour la gestion de .env
+python-dotenv>=1.0.0

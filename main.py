@@ -3,6 +3,7 @@
 import concurrent
 
 from utils.config import config, load_config # Import de l'instance config.
+from utils.logger import init_logger # Import de l'instance logger.
 
 
 def main():
