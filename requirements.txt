@@ -3,6 +3,8 @@
 # source .venv/bin/activate  OU .venv\Scripts\activate sur Windows
 # pip install -r requirements.txt
 
+# Ligne automatique : python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+
 # Conversion de PDF en images
 pdf2image==1.16.3
 

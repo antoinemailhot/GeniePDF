@@ -1,0 +1,29 @@
+# Environnements virtuels
+.venv/
+venv/
+env/
+
+# Fichiers Python compilés
+__pycache__/
+*.py[cod]
+
+# Fichiers de log
+*.log
+
+# Fichiers de configuration d'IDE
+.vscode/
+.idea/
+
+# Données temporaires
+*.swp
+.DS_Store
+
+# Fichiers de sortie
+*.pdf
+*.png
+*.jpg
+*.json
+*.xml
+
+# Environnement/test
+.env
