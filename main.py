@@ -2,6 +2,7 @@
 
 import concurrent
 
+from data_structuring import pandas_processor
 from pdf_tools import image_cleaner, pdf2image_wrapper
 from utils.config import config, load_config # Import de l'instance config.
 from utils.logger import init_logger # Import de l'instance logger.
