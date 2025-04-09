@@ -25,5 +25,11 @@ class Config:
     # Paramètre pour le traitement parallèle (Future Pattern)
     MAX_WORKERS = int(os.getenv("MAX_WORKERS", 5))
 
+def load_config():
+    """
+    Fonction pour instancier et renvoyer la configuration.
+    """
+    return Config()
+
 # Instanciation de la configuration pour l'utilisation globale
-config = Config()
+config = load_config()

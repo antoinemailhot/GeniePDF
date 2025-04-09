@@ -2,6 +2,8 @@
 
 import concurrent
 
+from utils.config import config, load_config # Import de l'instance config.
+
 
 def main():
     # Chargement de la configuration
