@@ -3,6 +3,7 @@
 import concurrent
 
 from data_structuring import pandas_processor
+from data_structuring.aggregator import aggregate_results
 from ocr import tesseract_engine
 from pdf_tools import image_cleaner, pdf2image_wrapper
 from repositories.pdf_repository import PdfRepository
