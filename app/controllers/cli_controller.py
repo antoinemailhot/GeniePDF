@@ -2,85 +2,63 @@
 
 import argparse
 import sys
-from main import main
-from utils.config import load_config  # Import de la fonction principale depuis main.py
+from main import main as run_cli_main  # main CLI
+from utils.config import load_config
+
+# Importe ta fonction GUI
+from controllers.gui_controller import launch_gui  
 
 def create_parser():
     """
     Crée et retourne un parser pour gérer les arguments CLI.
     """
-    parser = argparse.ArgumentParser(description="Lance le traitement des fichiers PDF pour extraire des informations.")
+    parser = argparse.ArgumentParser(description="Lance le traitement des fichiers PDF ou l'interface graphique.")
     
-    # Définition des arguments possibles
-    parser.add_argument(
-        '--config', 
-        type=str, 
-        default='config.json', 
-        help="Le fichier de configuration à utiliser (par défaut: config.json)"
-    )
-    
-    parser.add_argument(
-        '--input', 
-        type=str, 
-        required=True, 
-        help="Le répertoire contenant les fichiers PDF à traiter"
-    )
-    
-    parser.add_argument(
-        '--output', 
-        type=str, 
-        required=True, 
-        help="Le répertoire où les résultats traités seront sauvegardés"
-    )
-    
-    parser.add_argument(
-        '--workers', 
-        type=int, 
-        default=5, 
-        help="Le nombre de threads à utiliser pour le traitement parallèle (par défaut: 5)"
-    )
-    
-    parser.add_argument(
-        '--verbose', 
-        action='store_true', 
-        help="Activer le mode verbeux pour plus de logs"
-    )
-    
+    parser.add_argument('--config', type=str, default='config.json', help="Fichier de configuration (par défaut: config.json)")
+    parser.add_argument('--input', type=str, help="Répertoire d'entrée des PDF")
+    parser.add_argument('--output', type=str, help="Fichier de sortie JSON")
+    parser.add_argument('--workers', type=int, default=5, help="Nombre de threads (par défaut: 5)")
+    parser.add_argument('--verbose', action='store_true', help="Mode verbeux")
+    parser.add_argument('--gui', type=str, default="false", help="Lancer la GUI (true/false)")
+
     return parser
 
 def handle_args(args):
     """
-    Gère les arguments CLI et lance l'application.
+    Gère les arguments selon le mode (GUI ou CLI).
     """
-    # Charger la configuration basée sur les arguments
-    config = load_config(args.config)  # Vous pouvez adapter cela selon le format de votre config
+    use_gui = args.gui.lower() == "true"
 
-    # Mettre à jour la configuration si des arguments spécifiques sont fournis
-    config.pdf_input_directory = args.input
-    config.json_output_path = args.output
-    config.max_workers = args.workers
-
-    # Initialiser le logger si mode verbeux est activé
-    if args.verbose:
-        config.log_level = 'DEBUG'
+    if use_gui:
+        # Lancement de l'interface graphique avec les paramètres CLI (facultatifs)
+        launch_gui(config_path=args.config, input_path=args.input, output_path=args.output, workers=args.workers)
     else:
-        config.log_level = 'INFO'
+        # Chargement de la configuration
+        config = load_config(args.config)
 
-    # Appel de la fonction main avec la configuration modifiée
-    main(config)
+        # Mise à jour de la config avec les arguments CLI s'ils sont présents
+        if args.input:
+            config.pdf_input_directory = args.input
+        if args.output:
+            config.json_output_path = args.output
+        config.max_workers = args.workers
+        config.log_level = 'DEBUG' if args.verbose else 'INFO'
+
+        # Lancement du traitement CLI
+        run_cli_main(config)
 
 def main():
     """
-    Fonction principale qui gère les arguments CLI et lance le traitement.
+    Fonction principale qui détermine si on utilise le mode GUI ou CLI.
     """
-    # Création du parser
     parser = create_parser()
 
-    # Récupération des arguments
-    args = parser.parse_args()
-
-    # Traitement des arguments et lancement de l'application
-    handle_args(args)
+    # Si aucun argument n'est passé, lancer la GUI
+    if len(sys.argv) == 1:
+        launch_gui()
+    else:
+        args = parser.parse_args()
+        handle_args(args)
 
 if __name__ == "__main__":
     main()
