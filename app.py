@@ -2,15 +2,45 @@
 
 import sys
 import os
+import subprocess
 import argparse
 
-# Ajoute le dossier 'app/' au chemin d'importation
+# Ajouter 'app/' au PYTHONPATH
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "app"))
 
-# Imports internes
+def ensure_env_and_restart_if_needed():
+    """
+    Vérifie si les dépendances critiques (ex: dotenv) sont manquantes.
+    Si c’est le cas, crée un environnement virtuel `.venv`, installe les dépendances, puis relance le script.
+    """
+    try:
+        from dotenv import load_dotenv  # test d'import
+    except ModuleNotFoundError:
+        print("❗ Dépendance manquante détectée : 'python-dotenv'")
+        print("📦 Création de l’environnement virtuel et installation des dépendances...")
+
+        venv_path = ".venv"
+
+        # Crée le venv s'il n'existe pas
+        if not os.path.isdir(venv_path):
+            subprocess.check_call([sys.executable, "-m", "venv", venv_path])
+
+        # Installer les paquets requis
+        pip_exe = os.path.join(venv_path, "bin", "pip") if os.name != "nt" else os.path.join(venv_path, "Scripts", "pip.exe")
+        subprocess.check_call([pip_exe, "install", "-r", "requirements.txt"])
+
+        # Relance le script via l'interpréteur du venv
+        python_exe = os.path.join(venv_path, "bin", "python") if os.name != "nt" else os.path.join(venv_path, "Scripts", "python.exe")
+        print("🔁 Redémarrage automatique du script avec l’environnement virtuel...")
+        os.execv(python_exe, [python_exe] + sys.argv)  # relance le script avec les mêmes arguments
+
+# 🔁 On s'assure que l'environnement est prêt
+ensure_env_and_restart_if_needed()
+
+# À partir d'ici, les imports sont garantis
 from controllers.gui_controller import launch_gui
 from utils.config import load_config
-from main_cli import main as run_cli_main  # Importe le vrai traitement CLI
+from main_cli import main as run_cli_main
 
 def create_parser():
     parser = argparse.ArgumentParser(description="Lance GeniePDF en mode CLI ou GUI.")
@@ -30,7 +60,6 @@ def dispatch():
         launch_gui()
         return
 
-    # Arguments fournis
     args = parser.parse_args()
     use_gui = args.gui.lower() == "true"
 
