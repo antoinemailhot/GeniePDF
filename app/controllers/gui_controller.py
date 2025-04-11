@@ -134,7 +134,7 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
             if future.done():
                 try:
                     result = future.result()
-                    # Validation des données avec le patron "Validator" (taux de précision pres de 100%)
+                    # Validation des données avec le patron "Validator" 
                     if validate_json(result):
                         # Sauvegarde via le repository (optionnel si tu veux intégrer directement)
                         repo = PdfRepository(config.pdf_input_directory)
