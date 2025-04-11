@@ -2,7 +2,7 @@
 
 import argparse
 import sys
-from main import main as run_cli_main  # main CLI
+from app import main as run_cli_main  # main CLI
 from utils.config import load_config
 
 # Importe ta fonction GUI

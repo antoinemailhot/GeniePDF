@@ -1,4 +1,10 @@
-# main.py
+# app.py
+
+import sys
+import os
+
+# Ajoute le dossier 'app/' au chemin d'importation
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "app"))
 
 import concurrent
 

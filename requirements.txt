@@ -1,30 +1,18 @@
-# Comment installer les requirements :
-# python -m venv .venv
-# source .venv/bin/activate  OU .venv\Scripts\activate sur Windows
-# pip install -r requirements.txt
-
-# Ligne automatique : python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
-
-# Conversion de PDF en images
-pdf2image==1.16.3
-
-# Reconnaissance de texte via Tesseract-OCR
-pytesseract==0.3.10
-
-# Traitement d’images avec OpenCV
-opencv-python==4.7.0.72
-
-# Structuration et manipulation de données
-pandas==1.5.3
-
-# Extraction de contenu PDF (texte, images, métadonnées)
-PyMuPDF==1.22.1
-
-# Validation des données JSON avec JsonSchema
+attrs==25.3.0
 jsonschema==4.17.3
-
-# Pour la validation des DTO (optionnel si ont a du temps.)
-#pydantic==1.10.2
-
-# Pour la gestion de .env
-python-dotenv>=1.0.0
+numpy==2.2.4
+opencv-python==4.7.0.72
+packaging==24.2
+pandas==2.2.3
+pdf2image==1.16.3
+pillow==11.1.0
+PyMuPDF==1.22.1
+pyrsistent==0.20.0
+pytesseract==0.3.10
+python-dateutil==2.9.0.post0
+python-dotenv==1.1.0
+pytz==2025.2
+setuptools==78.1.0
+six==1.17.0
+tzdata==2025.2
+wheel==0.45.1
