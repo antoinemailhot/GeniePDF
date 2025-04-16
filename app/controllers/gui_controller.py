@@ -134,11 +134,12 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
             if future.done():
                 try:
                     result = future.result()
+                    json_ready_data = result.to_dict(orient="records") if not result.empty else []
                     # Validation des données avec le patron "Validator" 
-                    if validate_json(result):
+                    if validate_json(json_ready_data):
                         # Sauvegarde via le repository (optionnel si tu veux intégrer directement)
                         repo = PdfRepository(config.pdf_input_directory)
-                        repo.save_extracted_data(result, chosen_output)
+                        repo.save_extracted_data(json_ready_data, chosen_output)
                         messagebox.showinfo("Succès", "Le traitement a été effectué et les données ont été sauvegardées.")
                     else:
                         messagebox.showerror("Erreur", "Validation JSON échouée. Vérifiez vos données extraites.")

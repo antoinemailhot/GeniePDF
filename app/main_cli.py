@@ -29,9 +29,11 @@ def main(config):
     # Agrégation
     final_data = aggregate_results(results)
 
-    # Validation & export
-    if validate_json(final_data):
-        pdf_repo.save_extracted_data(final_data, config.json_output_path)
+    # Conversion du DataFrame vers une liste de dictionnaires
+    json_ready_data = final_data.to_dict(orient="records") if not final_data.empty else []
+
+    if validate_json(json_ready_data):
+        pdf_repo.save_extracted_data(json_ready_data, config.json_output_path)
     else:
         logger.error("Validation JSON échouée")
 

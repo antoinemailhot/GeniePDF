@@ -20,3 +20,5 @@ python app.py --gui true --input data/ --output results.json
 # pip install -r requirements.txt
 
 # Ligne automatique : python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+
+# Vous dever installer tesseract
