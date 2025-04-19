@@ -1,43 +1,26 @@
-# controllers/gui_controller.py
-
 import os
+import json
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import concurrent.futures
+import pandas as pd
 
-# Importer ici les fonctions de traitement et validation.
-# Assure-toi que ces modules sont correctement implémentés.
 from pdf_tools import pdf2image_wrapper, image_cleaner
 from ocr import tesseract_engine
 from services.regex_parser import extract_data_with_regex
 from data_structuring.aggregator import aggregate_results
 from data_structuring import pandas_processor
 from utils.validator import validate_json
-from repositories.pdf_repository import PdfRepository
 from utils.config import load_config
+from utils.schema_updater import update_schema_structure
+from utils.schema_manager import load_schemas
 
 def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
-    """
-    Lance l'interface graphique de GeniePDF.
-    Permet de :
-      - Sélectionner un fichier PDF ou un dossier (récursivement)
-      - Supprimer des fichiers sélectionnés
-      - Choisir un chemin de sortie pour l'export JSON
-      - Lancer le traitement en arrière-plan (sans bloquer l'interface)
-    
-    Les paramètres passés (config_path, input_path, output_path, workers) préchargent les champs.
-    """
-    
-    # Liste des fichiers PDF sélectionnés
     selected_files = []
-
-    # Instance de configuration si besoin de créer le repository
     config = load_config() if config_path is None else load_config(config_path)
 
-    # Mettre à jour la configuration avec input_path et output_path s'ils sont fournis
     if input_path:
         if os.path.isdir(input_path):
-            # Ajouter tous les fichiers PDF du dossier
             for root_dir, _, files in os.walk(input_path):
                 for f in files:
                     if f.lower().endswith(".pdf"):
@@ -46,26 +29,37 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
                             selected_files.append(full_path)
         elif os.path.isfile(input_path) and input_path.lower().endswith(".pdf"):
             selected_files.append(input_path)
-            
-    # Fonction qui met à jour la listbox des fichiers sélectionnés
+
+    root = tk.Tk()
+    root.title("GeniePDF - Interface graphique")
+
+    # ==== Interface graphique ====
+    file_frame = ttk.LabelFrame(root, text="Fichiers PDF sélectionnés")
+    file_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+    file_listbox = tk.Listbox(file_frame, height=10)
+    file_listbox.pack(side=tk.LEFT, fill="both", expand=True, padx=(5, 0), pady=5)
+
+    scrollbar = ttk.Scrollbar(file_frame, orient="vertical", command=file_listbox.yview)
+    scrollbar.pack(side=tk.RIGHT, fill="y")
+    file_listbox.config(yscrollcommand=scrollbar.set)
+
+    button_frame = ttk.Frame(root)
+    button_frame.pack(fill="x", padx=10, pady=5)
+
     def update_file_listbox():
         file_listbox.delete(0, tk.END)
         for f in selected_files:
             file_listbox.insert(tk.END, f)
-    
-    # Fonction d'ajout d'un fichier PDF
+
     def add_pdf_file():
-        file_path = filedialog.askopenfilename(
-            title="Sélectionnez un fichier PDF",
-            filetypes=[("Fichiers PDF", "*.pdf")]
-        )
+        file_path = filedialog.askopenfilename(filetypes=[("Fichiers PDF", "*.pdf")])
         if file_path and file_path not in selected_files:
             selected_files.append(file_path)
             update_file_listbox()
-    
-    # Fonction d'ajout d'un dossier contenant des PDF (récursivement)
+
     def add_pdf_folder():
-        folder_path = filedialog.askdirectory(title="Sélectionnez un dossier")
+        folder_path = filedialog.askdirectory()
         if folder_path:
             for root_dir, _, files in os.walk(folder_path):
                 for f in files:
@@ -74,8 +68,7 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
                         if full_path not in selected_files:
                             selected_files.append(full_path)
             update_file_listbox()
-    
-    # Fonction de suppression du fichier sélectionné dans la liste
+
     def remove_selected_file():
         selected_indices = file_listbox.curselection()
         if not selected_indices:
@@ -84,10 +77,8 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
         for index in reversed(selected_indices):
             del selected_files[index]
         update_file_listbox()
-    
-    # Fonction pour choisir le chemin de sortie
+
     def choose_output():
-        # Ici nous choisissons un fichier de sortie JSON
         output = filedialog.asksaveasfilename(
             title="Choisissez le fichier de sortie",
             defaultextension=".json",
@@ -96,22 +87,44 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
         if output:
             output_entry.delete(0, tk.END)
             output_entry.insert(0, output)
-    
-    # Fonction de traitement en arrière-plan (dans un thread séparé)
+
+    ttk.Button(button_frame, text="Ajouter un fichier PDF", command=add_pdf_file).pack(side=tk.LEFT)
+    ttk.Button(button_frame, text="Ajouter un dossier", command=add_pdf_folder).pack(side=tk.LEFT)
+    ttk.Button(button_frame, text="Supprimer sélection", command=remove_selected_file).pack(side=tk.LEFT)
+
+    output_frame = ttk.Frame(root)
+    output_frame.pack(fill="x", padx=10, pady=5)
+
+    ttk.Label(output_frame, text="Fichier de sortie :").pack(side=tk.LEFT)
+    output_entry = ttk.Entry(output_frame, width=50)
+    output_entry.pack(side=tk.LEFT, padx=(5, 0))
+    ttk.Button(output_frame, text="Parcourir", command=choose_output).pack(side=tk.LEFT)
+
+    progress_label = ttk.Label(root, text="")
+    progress_label.pack(pady=(0, 5))
+
+    progress_bar = ttk.Progressbar(root, mode="indeterminate")
+    progress_bar.pack(fill="x", padx=10, pady=(0, 5))
+
+    start_button = ttk.Button(root, text="Démarrer", command=lambda: start_processing())
+    start_button.pack(pady=5)
+
     def process_data(file_list):
-        # Similaire au pipeline défini dans main_cli.py
         results = []
         for pdf_file in file_list:
             images = pdf2image_wrapper.convert_pdf_to_images(pdf_file)
             processed_images = [image_cleaner.preprocess(img) for img in images]
             texts = [tesseract_engine.extract_text(img) for img in processed_images]
             extracted_data = [extract_data_with_regex(text) for text in texts]
-            structured_data = pandas_processor.structurize(extracted_data)
-            results.append(structured_data)
+            df = pandas_processor.structurize(extracted_data)
+            if not isinstance(df, pd.DataFrame):
+                raise TypeError(f"Résultat non DataFrame pour '{pdf_file}'")
+            results.append(df)
         aggregated = aggregate_results(results)
+        if not isinstance(aggregated, pd.DataFrame):
+            aggregated = pd.concat(aggregated, ignore_index=True) if aggregated else pd.DataFrame()
         return aggregated
 
-    # Fonction appelée lorsqu'on lance le traitement via le bouton
     def start_processing():
         chosen_output = output_entry.get()
         if not selected_files:
@@ -121,86 +134,46 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
             messagebox.showwarning("Avertissement", "Veuillez choisir un fichier de sortie.")
             return
 
-        # Désactiver le bouton pour éviter les clics multiples
+        # Déterminer le type de document et les nouveaux exemples
+        doc_type = "facture"  # Remplacez cela par le type de document approprié
+        new_examples = [{"exemple_key": "exemple_value"}]  # Remplacez cela par les exemples appropriés
+
+        # Mise à jour du schéma
+        update_schema_structure(doc_type, new_examples)
+
         start_button.config(state=tk.DISABLED)
         progress_label.config(text="Traitement en cours...")
-        
-        # Lancer le traitement en arrière-plan via un ThreadPoolExecutor
+        progress_bar.start(10)
+
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
         future = executor.submit(process_data, selected_files)
 
-        # Fonction pour vérifier le résultat sans bloquer l'interface
         def check_future():
             if future.done():
+                progress_bar.stop()
                 try:
                     result = future.result()
-                    json_ready_data = result.to_dict(orient="records") if not result.empty else []
-                    # Validation des données avec le patron "Validator" 
-                    if validate_json(json_ready_data):
-                        # Sauvegarde via le repository (optionnel si tu veux intégrer directement)
-                        repo = PdfRepository(config.pdf_input_directory)
-                        repo.save_extracted_data(json_ready_data, chosen_output)
-                        messagebox.showinfo("Succès", "Le traitement a été effectué et les données ont été sauvegardées.")
+                    records = result.to_dict(orient="records")
+                    json_ready_data = [r for r in records if r]
+                    if not json_ready_data:
+                        messagebox.showwarning("Aucun résultat", "Aucune donnée n'a pu être extraite.")
                     else:
-                        messagebox.showerror("Erreur", "Validation JSON échouée. Vérifiez vos données extraites.")
+                        with open(chosen_output, "w", encoding="utf-8") as f:
+                            json.dump(json_ready_data, f, indent=2, ensure_ascii=False)
+                        if validate_json(json_ready_data):
+                            messagebox.showinfo("Succès", "Traitement terminé avec succès.")
+                        else:
+                            messagebox.showerror("Erreur", "Validation JSON échouée.")
                 except Exception as e:
-                    messagebox.showerror("Erreur", f"Une erreur s'est produite lors du traitement : {e}")
+                    messagebox.showerror("Erreur", f"Erreur pendant le traitement : {e}")
                 finally:
-                    progress_label.config(text="")
                     start_button.config(state=tk.NORMAL)
-                    executor.shutdown()
+                    progress_label.config(text="")
             else:
-                # Rappel la vérification après 100 ms
                 root.after(100, check_future)
-        root.after(100, check_future)
-    
-    # Création de la fenêtre principale
-    root = tk.Tk()
-    root.title("GeniePDF - Interface Graphique")
 
-    # Cadre pour les boutons d'ajout/suppression
-    button_frame = ttk.Frame(root)
-    button_frame.pack(padx=10, pady=10, fill=tk.X)
-    ttk.Button(button_frame, text="Ajouter un fichier PDF", command=add_pdf_file).pack(side=tk.LEFT, padx=5)
-    ttk.Button(button_frame, text="Ajouter un dossier", command=add_pdf_folder).pack(side=tk.LEFT, padx=5)
-    ttk.Button(button_frame, text="Supprimer sélection", command=remove_selected_file).pack(side=tk.LEFT, padx=5)
+        check_future()
 
-    # Cadre avec une listbox pour afficher les fichiers sélectionnés
-    list_frame = ttk.Frame(root)
-    list_frame.pack(padx=10, pady=5, fill=tk.BOTH, expand=True)
-    scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL)
-    file_listbox = tk.Listbox(list_frame, yscrollcommand=scrollbar.set, height=10)
-    scrollbar.config(command=file_listbox.yview)
-    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-    file_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-    # Cadre pour choisir le chemin de sortie
-    output_frame = ttk.Frame(root)
-    output_frame.pack(padx=10, pady=5, fill=tk.X)
-    ttk.Label(output_frame, text="Fichier de sortie :").pack(side=tk.LEFT, padx=5)
-    output_entry = ttk.Entry(output_frame, width=40)
-    output_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
-    ttk.Button(output_frame, text="Parcourir...", command=choose_output).pack(side=tk.LEFT, padx=5)
-
-    # Bouton pour démarrer le traitement et label de progression
-    start_button = ttk.Button(root, text="Démarrer le traitement", command=start_processing)
-    start_button.pack(pady=10)
-    progress_label = ttk.Label(root, text="")
-    progress_label.pack()
-
-    # Chargement des valeurs préchargées (si elles sont fournies en argument)
-    if input_path and os.path.exists(input_path):
-        if os.path.isdir(input_path):
-            for root_dir, _, files in os.walk(input_path):
-                for f in files:
-                    if f.lower().endswith(".pdf"):
-                        full_path = os.path.join(root_dir, f)
-                        if full_path not in selected_files:
-                            selected_files.append(full_path)
-        elif os.path.isfile(input_path) and input_path.lower().endswith(".pdf"):
-            selected_files.append(input_path)
-        update_file_listbox()
-    if output_path:
-        output_entry.insert(0, output_path)
-
+    update_file_listbox()
     root.mainloop()

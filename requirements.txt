@@ -16,3 +16,5 @@ setuptools==78.1.0
 six==1.17.0
 tzdata==2025.2
 wheel==0.45.1
+tqdm==4.66.4
+genson>=1.2.2
