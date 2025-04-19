@@ -134,11 +134,11 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
             messagebox.showwarning("Avertissement", "Veuillez choisir un fichier de sortie.")
             return
 
-        # Déterminer le type de document et les nouveaux exemples
-        doc_type = "facture"  # Remplacez cela par le type de document approprié
-        new_examples = [{"exemple_key": "exemple_value"}]  # Remplacez cela par les exemples appropriés
+
 
         # Mise à jour du schéma
+        doc_type = "pdf"  # Replace with the appropriate value or logic to determine doc_type
+        new_examples = []  # Replace with the appropriate value or logic to determine new_examples
         update_schema_structure(doc_type, new_examples)
 
         start_button.config(state=tk.DISABLED)
@@ -154,6 +154,9 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
                 try:
                     result = future.result()
                     records = result.to_dict(orient="records")
+
+                    print(records)
+
                     json_ready_data = [r for r in records if r]
                     if not json_ready_data:
                         messagebox.showwarning("Aucun résultat", "Aucune donnée n'a pu être extraite.")
