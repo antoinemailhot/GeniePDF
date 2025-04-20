@@ -111,9 +111,6 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
             root.update_idletasks()
 
             # Pipeline d'extraction
-             # Injecter le chemin du fichier source
-            df['file'] = pdf
-            dfs.append(df)
             imgs = pdf2image_wrapper.convert_pdf_to_images(pdf)
             imgs = [image_cleaner.preprocess(im) for im in imgs]
             txts = [tesseract_engine.extract_text(im) for im in imgs]
@@ -123,7 +120,9 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
             if not isinstance(df, pd.DataFrame):
                 raise TypeError(f"Extraction pour « {pdf} » n’a pas renvoyé un DataFrame.")
 
-           
+            # Injecter le chemin du fichier source
+            df['file'] = pdf
+            dfs.append(df)
 
         # Dernière mise à jour à 100%
         status_label.config(text=f"{total}/{total} – terminé (100%)")
