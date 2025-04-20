@@ -1,52 +1,114 @@
-# services/regex_parser.py
 
 import re
+from datetime import datetime
 
 def extract_data_with_regex(text):
     """
-    Applique des regex pour extraire des données structurées du texte OCRisé.
+    Détermine dynamiquement le type de document et applique l'extraction adaptée.
+    Retourne un dictionnaire correspondant à l'un des modèles finaux : Piece, Tool, Customer, Profile, Requisition.
     """
-    data = {}
+    if "DIE ORDER FORM" in text.upper() or "DIE / TOOL PURCHASE ORDER" in text.upper():
+        return {
+            "requisition": extract_requisition(text)
+        }
+    elif "PIECE" in text.upper():
+        return {
+            "piece": extract_piece(text)
+        }
+    elif "TOOL" in text.upper():
+        return {
+            "tool": extract_tool(text)
+        }
+    elif "PROFILE" in text.upper():
+        return {
+            "profile": extract_profile(text)
+        }
+    elif "CUSTOMER" in text.upper():
+        return {
+            "customer": extract_customer(text)
+        }
+    else:
+        return {}
 
-    # PO Number
-    match_po = re.search(r"PO\s*Number\s*[:\-]?\s*(\S+)", text, re.IGNORECASE)
-    if match_po:
-        data["po_number"] = match_po.group(1)
+def extract_requisition(text):
+    requisition = {}
+    requisition["requisitionStatus"] = _search(text, r"(requisition status|status)\s*[:\-]?\s*(\w+)", 2)
+    requisition["description"] = _search(text, r"(description)\s*[:\-]?\s*(.+)", 2)
+    requisition["receptionDate"] = _search(text, r"(reception date|delivery date)\s*[:\-]?\s*(\d{1,2}/\d{1,2}/\d{4})", 2)
+    requisition["customerPurchaseNumber"] = _search(text, r"(PO Number|purchase number|customer order)\s*[:\-]?\s*(\w+)", 2)
+    requisition["contact"] = _search(text, r"(contact|die maker)\s*[:\-]?\s*(\w+)", 2)
+    requisition["toolNumber"] = _search(text, r"tool number\s*[:\-]?\s*(\w+)", 1)
+    requisition["cavityQuantity"] = _int(_search(text, r"cavities\s*[:\-]?\s*(\d+)", 1))
+    requisition["doubleLayout"] = _bool("double layout" in text.lower())
+    return requisition
 
-    # Order Date
-    match_order_date = re.search(r"Order\s*Date\s*[:\-]?\s*(\d{2}/\d{2}/\d{4})", text, re.IGNORECASE)
-    if match_order_date:
-        data["order_date"] = match_order_date.group(1)
+def extract_piece(text):
+    return {
+        "copyNumber": _int(_search(text, r"copy number\s*[:\-]?\s*(\d+)", 1)),
+        "location": _search(text, r"location\s*[:\-]?\s*(\w+)", 1),
+        "status": _search(text, r"status\s*[:\-]?\s*(\w+)", 1),
+        "type": _search(text, r"type\s*[:\-]?\s*(\w+)", 1),
+        "diameter": _float(_search(text, r"diameter\s*[:\-]?\s*([\d.]+)", 1)),
+        "height": _float(_search(text, r"height\s*[:\-]?\s*([\d.]+)", 1)),
+        "nitrogen": _bool("nitride" in text.lower()),
+        "surfaceNitrogen": _bool("surface nitrogen" in text.lower()),
+        "toBeManufactured": _bool("to be manufactured" in text.lower()),
+        "customerCode": _search(text, r"customer code\s*[:\-]?\s*(\w+)", 1)
+    }
 
-    # Vendor
-    match_vendor = re.search(r"Vendor\s*[:\-]?\s*(\S+)", text, re.IGNORECASE)
-    if match_vendor:
-        data["vendor_id"] = match_vendor.group(1)
+def extract_tool(text):
+    return {
+        "assemblyType": _search(text, r"(assembly type|die style)\s*[:\-]?\s*(\w+)", 2),
+        "pressList": _search(text, r"press\s*[:\-]?\s*([\w\- ,]+)", 1),
+        "canBeInterlock": _bool("interlock" in text.lower()),
+        "description": _search(text, r"description\s*[:\-]?\s*(.+)", 1),
+        "displayCode": _search(text, r"display code\s*[:\-]?\s*(\w+)", 1),
+        "customerCode": _search(text, r"customer code\s*[:\-]?\s*(\w+)", 1),
+        "totalStack": _float(_search(text, r"total stack\s*[:\-]?\s*([\d.]+)", 1)),
+        "copyNumber": _int(_search(text, r"copy number\s*[:\-]?\s*(\d+)", 1))
+    }
 
-    # Part Number
-    match_part = re.search(r"(MW[-−]\d+)", text)
-    if match_part:
-        data["part_number"] = match_part.group(1)
+def extract_profile(text):
+    return {
+        "customerCodePrefix": _search(text, r"customer code prefix\s*[:\-]?\s*(\w+)", 1),
+        "customerCode": _search(text, r"customer code\s*[:\-]?\s*(\w+)", 1),
+        "description": _search(text, r"description\s*[:\-]?\s*(.+)", 1),
+        "creationDate": _search(text, r"(creation date|date)\s*[:\-]?\s*(\d{1,2}/\d{1,2}/\d{4})", 2),
+        "alloy": _search(text, r"alloy\s*[:\-]?\s*(\w+)", 1),
+        "mandrelQuantity": _int(_search(text, r"mandrel quantity\s*[:\-]?\s*(\d+)", 1)),
+        "cavityQuantity": _int(_search(text, r"cavity quantity\s*[:\-]?\s*(\d+)", 1)),
+        "interlock": _bool("interlock" in text.lower()),
+        "zsc": _float(_search(text, r"zsc\s*[:\-]?\s*([\d.]+)", 1)),
+        "doubleLayoutAngle": _float(_search(text, r"double layout angle\s*[:\-]?\s*([\d.]+)", 1)),
+        "hasElectrode": _bool("electrode" in text.lower()),
+        "hasMicrofinish": _bool("microfinish" in text.lower())
+    }
 
-    # Dimensions (ex: 11 x 6.406)
-    match_dim = re.search(r"(\d+(?:\.\d+)?)\s*[xX×]\s*(\d+(?:\.\d+)?)", text)
-    if match_dim:
-        data["width"] = float(match_dim.group(1))
-        data["height"] = float(match_dim.group(2))
+def extract_customer(text):
+    return {
+        "nickname": _search(text, r"nickname\s*[:\-]?\s*(\w+)", 1),
+        "phone": _search(text, r"phone\s*[:\-]?\s*(\(?\d{3}\)?[ .-]?\d{3}[ .-]?\d{4})", 1),
+        "billingAddress": _search(text, r"billing address\s*[:\-]?\s*(.+)", 1),
+        "shippingAddress": _search(text, r"shipping address\s*[:\-]?\s*(.+)", 1),
+        "companyName": _search(text, r"company name\s*[:\-]?\s*(.+)", 1)
+    }
 
-    # Unit Price
-    match_unit_price = re.search(r"Unit\s+Price\s*[:\-]?\s*([\d,]+\.\d+)", text)
-    if match_unit_price:
-        data["unit_price"] = float(match_unit_price.group(1).replace(",", ""))
+# Helpers
+def _search(text, pattern, group=1):
+    match = re.search(pattern, text, re.IGNORECASE)
+    return match.group(group).strip() if match else None
 
-    # Total
-    match_total = re.search(r"Total\s*[:\-]?\s*([\d,]+\.\d+)", text)
-    if match_total:
-        data["total_price"] = float(match_total.group(1).replace(",", ""))
+def _bool(val):
+    return val if isinstance(val, bool) else str(val).lower() in ("yes", "true", "1")
 
-    # Date générique de secours (fallback)
-    match_date = re.search(r"(\d{2}/\d{2}/\d{4})", text)
-    if match_date and "order_date" not in data:
-        data["date"] = match_date.group(1)
+def _int(val):
+    try:
+        return int(val)
+    except:
+        return None
 
-    return data
+def _float(val):
+    try:
+        return float(val)
+    except:
+        return None
