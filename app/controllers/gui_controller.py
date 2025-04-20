@@ -115,6 +115,7 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
             images = pdf2image_wrapper.convert_pdf_to_images(pdf_file)
             processed_images = [image_cleaner.preprocess(img) for img in images]
             texts = [tesseract_engine.extract_text(img) for img in processed_images]
+            print(texts)
             extracted_data = [extract_data_with_regex(text) for text in texts]
             df = pandas_processor.structurize(extracted_data)
             if not isinstance(df, pd.DataFrame):
@@ -137,7 +138,7 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
 
 
         # Mise à jour du schéma
-        doc_type = "pdf"  # Replace with the appropriate value or logic to determine doc_type
+        doc_type = "base"  # Replace with the appropriate value or logic to determine doc_type
         new_examples = []  # Replace with the appropriate value or logic to determine new_examples
         update_schema_structure(doc_type, new_examples)
 
@@ -153,9 +154,12 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
                 progress_bar.stop()
                 try:
                     result = future.result()
+
+                    print(result)
+
                     records = result.to_dict(orient="records")
 
-                    print(records)
+                    #print(records)
 
                     json_ready_data = [r for r in records if r]
                     if not json_ready_data:
