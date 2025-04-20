@@ -47,6 +47,8 @@ def extract_piece(text: str) -> List[Dict[str, Any]]:
 def _extract_tool(block: str) -> Dict[str, Any]:
     txt = block.lower()
 
+
+
     # Copy dans la colonne tableau «  Copy »
     copy = _match(block, r"\bcopy\b\s*(\d{1,3})")          # ← 4
     if not copy:                                           # fallback “Copy #”
@@ -62,6 +64,34 @@ def _extract_tool(block: str) -> Dict[str, Any]:
         "totalStack"    : _f(_match(block, r"\btotal stack\b\s*[:\-]?\s*([\d.,]+)")),
         "copyNumber"    : _i(copy)
     }
+# valeurs autorisées pour Assembly Type
+_ASS_TYPES = r"DBF|DF|DB|BAFF|H2|H3"
+
+def extract_tool(text: str) -> List[Dict[str, Any]]:
+    """
+    Découpe la zone tableau 'Die / Feeder / Backer / Bolster' OU
+    – à défaut – chaque occurrence du mot 'TOOL', puis applique _extract_tool.
+    Retourne une liste (possiblement vide) d'outils trouvés dans la page.
+    """
+    blocs = []
+
+    # 1. Découpage spécifique Tower : lignes commençant par Die / Feeder / Backer / Bolster
+    #    → cela évite de capturer le titre « DIE / TOOL PURCHASE ORDER ».
+    rows = re.split(r"\b(Die|Feeder|Backer|Bolster)\b", text, flags=FLAGS)
+    if len(rows) > 1:                      # on a bien trouvé le tableau
+        i = 1                              # rows[0] = avant 1ʳᵉ occurrence, on saute
+        while i < len(rows):
+            payload = rows[i+1]            # le texte qui suit le mot‑clé
+            blocs.append(payload)
+            i += 2
+    else:
+        # 2. Fallback : on découpe simplement sur le mot 'TOOL'
+        blocs = _split_on("TOOL", text)
+
+    # 3. Extraction
+    out = [_extract_tool(b) for b in blocs]
+    # On garde seulement les outils avec au moins un champ non‑vide
+    return [o for o in out if any(v is not None for v in o.values())]
 
 # REQUISITION  ────────────────────────
 def extract_requisition(text: str) -> Dict[str, Any]:
