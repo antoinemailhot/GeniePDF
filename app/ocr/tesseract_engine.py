@@ -15,5 +15,5 @@ def extract_text(image, langs: str | None = None) -> str:
     """
     lang = langs or DEFAULT_LANGS
     # Possibilité d'ajouter des paramètres OEM/PSM si besoin
-    custom_cfg = "--oem 3 --psm 6"
+    custom_cfg = "--oem 3 --psm 4"
     return pytesseract.image_to_string(image, lang=lang, config=custom_cfg)

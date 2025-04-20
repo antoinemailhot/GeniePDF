@@ -43,23 +43,38 @@ def _extract_piece(block: str) -> Dict[str, Any]:
 def extract_piece(text: str) -> List[Dict[str, Any]]:
     return [_extract_piece(b) for b in _split_on("PIECE", text)]
 
-# ─────────── TOOL ───────────
-_ASS_TYPES = r"(DBF|DF|DB|BAFF|H2|H3)"
+# TOOL  ───────────────────────────────
 def _extract_tool(block: str) -> Dict[str, Any]:
     txt = block.lower()
+
+    # Copy dans la colonne tableau «  Copy »
+    copy = _match(block, r"\bcopy\b\s*(\d{1,3})")          # ← 4
+    if not copy:                                           # fallback “Copy #”
+        copy = _match(block, r"\bcopy\s*#?\s*[:\-]?\s*(\d+)")
+
     return {
-        "assemblyType"   : _match(block, fr"(assembly type|die style)\b\s*[:\-]?\s*{_ASS_TYPES}", 2),
-        "pressList"      : _match(block, r"\bpress(?:es| list)?\b\s*[:\-]?\s*([\w ,;/\-]+)"),
-        "canBeInterlock" : _b("interlock" in txt),
-        "description"    : _match(block, r"\bdescription\b\s*[:\-]?\s*(.+)"),
-        "displayCode"    : _match(block, r"\bdisplay code\b\s*[:\-]?\s*([\w\-]+)"),
-        "customerCode"   : _match(block, r"\bcustomer code\b\s*[:\-]?\s*([\w\-]+)"),
-        "totalStack"     : _f(_match(block, r"\btotal stack\b\s*[:\-]?\s*([\d.,]+)")),
-        "copyNumber"     : _i(_match(block, r"\bcopy\s*#?\s*[:\-]?\s*(\d+)"))
+        "assemblyType"  : _match(block, fr"\b({ _ASS_TYPES })\b"),  # 8" Baff, DBF…
+        "pressList"     : _match(block, r"\bpress\s*#?\s*[:\-]?\s*([\d, &]+)"), # « Press # 8 »
+        "canBeInterlock": _b("interlock" in txt),
+        "description"   : _match(block, r"\bdescription\b\s*[:\-]?\s*(.+)"),
+        "displayCode"   : _match(block, r"\bdisplay code\b\s*[:\-]?\s*([\w\-]+)"),
+        "customerCode"  : _match(block, r"\bcustomer code\b\s*[:\-]?\s*([\w\-]+)"),
+        "totalStack"    : _f(_match(block, r"\btotal stack\b\s*[:\-]?\s*([\d.,]+)")),
+        "copyNumber"    : _i(copy)
     }
 
-def extract_tool(text: str) -> List[Dict[str, Any]]:
-    return [_extract_tool(b) for b in _split_on("TOOL", text)]
+# REQUISITION  ────────────────────────
+def extract_requisition(text: str) -> Dict[str, Any]:
+    return {
+        "requisitionStatus"     : _match(text, r"\bstatus\b\s*[:\-]?\s*([\w\-]+)"),
+        "description"           : _match(text, r"\bnotes?\b\s*[:\-]?\s*(.+)"),
+        "receptionDate"         : _match(text, r"\bdate\b\s*[:\-]?\s*(\d{1,2}/\d{1,2}/\d{4})"),
+        "customerPurchaseNumber": _match(text, r"\bPO\s*Number\s*[:\-]?\s*([\w\-]+)"),  # W65763‑07
+        "contact"               : _match(text, r"\bcontact\b\s*[:\-]?\s*([\w\s]+)"),     # Alex
+        "toolNumber"            : _match(text, r"\btool number\b\s*[:\-]?\s*([\w\-]+)"),
+        "cavityQuantity"        : _i(_match(text, r"\bhole[s]?\b\s*[:\-]?\s*(\d+)")),    # Holes: 1
+        "doubleLayout"          : _b("double layout" in text.lower())
+    }
 
 # ─────────── CUSTOMER ───────────
 def _extract_customer(block: str) -> Dict[str, Any]:
@@ -97,19 +112,7 @@ def _extract_profile(block: str) -> Dict[str, Any]:
 def extract_profile(text: str) -> List[Dict[str, Any]]:
     return [_extract_profile(b) for b in _split_on("PROFILE", text)]
 
-# ─────────── REQUISITION ───────────
-def extract_requisition(text: str) -> Dict[str, Any]:
-    txt = text.lower()
-    return {
-        "requisitionStatus"     : _match(text, r"\b(requisition status|statut)\b\s*[:\-]?\s*([\w\-]+)", 2),
-        "description"           : _match(text, r"\bdescription\b\s*[:\-]?\s*(.+)"),
-        "receptionDate"         : _match(text, r"\b(reception|delivery) date\b\s*[:\-]?\s*(\d{1,2}/\d{1,2}/\d{4})", 2),
-        "customerPurchaseNumber": _match(text, r"\b(purchase number|po #?)\b\s*[:\-]?\s*([\w\-]+)", 2),
-        "contact"               : _match(text, r"\b(contact|die maker)\b\s*[:\-]?\s*([A‑Z][\w\s\-]{2,30})", 2),
-        "toolNumber"            : _match(text, r"\btool number\b\s*[:\-]?\s*([\w\-]+)"),
-        "cavityQuantity"        : _i(_match(text, r"\bcavity quantity\b\s*[:\-]?\s*(\d+)")),
-        "doubleLayout"          : _b("double layout" in txt)
-    }
+
 
 # ─────────── Router principal ───────────
 def extract_data_with_regex(text: str) -> List[Dict[str, Any]]:
