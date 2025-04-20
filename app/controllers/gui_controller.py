@@ -101,6 +101,7 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
     # === traitement ===
     def process_data(files):
         dfs = []
+        all_collections = []  # pour JSON final
         total = len(files)
         for i, pdf in enumerate(files, start=1):
             # Calcul du pourcentage
@@ -115,7 +116,7 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
             imgs = [image_cleaner.preprocess(im) for im in imgs]
             txts = [tesseract_engine.extract_text(im) for im in imgs]
             raws = [extract_data_with_regex(t) for t in txts]
-            df = pandas_processor.structurize(raws, pdf)
+            df, collections = pandas_processor.structurize(raws, pdf)
 
             if not isinstance(df, pd.DataFrame):
                 raise TypeError(f"Extraction pour « {pdf} » n’a pas renvoyé un DataFrame.")
@@ -123,7 +124,7 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
             # Injecter le chemin du fichier source
             df['file'] = pdf
             dfs.append(df)
-
+            all_collections.extend(collections)   # pour JSON final
         # Dernière mise à jour à 100%
         status_label.config(text=f"{total}/{total} – terminé (100%)")
         progress['value'] = 100
@@ -142,6 +143,7 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
         return ag
 
     def start():
+        all_collections = []
         outp = output_entry.get().strip()
         if not selected_files:
             return messagebox.showwarning("Avertissement", "Aucun PDF sélectionné.")
@@ -160,7 +162,7 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
                     df = future.result()
                     recs = df.to_dict(orient="records")
                     with open(outp, "w", encoding="utf-8") as f:
-                        json.dump(recs, f, indent=2, ensure_ascii=False)
+                        json.dump(all_collections, f, indent=2, ensure_ascii=False)
                     if validate_json(recs):
                         messagebox.showinfo("Succès", "Terminé ! 🎉")
                     else:

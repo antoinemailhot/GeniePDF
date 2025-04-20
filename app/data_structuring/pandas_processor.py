@@ -1,26 +1,29 @@
 # data_structuring/pandas_processor.py
 import pandas as pd
 
-def structurize(raw_pages, file_path=None):
+def structurize(raw_pages, file_path):
     """
-    raw_pages : liste (une entrée par page) de listes/dicts
-    file_path : injecté par gui/CLI
-    Retourne un DataFrame déjà *long* (tidy).
+    Construit un DataFrame *long* et retourne AUSSI un “payload” groupé par fichier.
     """
-    # 1. On a une liste [ page0_records, page1_records, ... ]
-    records = []
-    for idx, one_page in enumerate(raw_pages, start=1):
-        for rec in one_page:                 # rec = {"model": "...", ...}
-            rec = rec.copy()
-            rec["page"] = idx
-            records.append(rec)
+    recs = []
+    for p_idx, page in enumerate(raw_pages, start=1):
+        for model in page:
+            item = model.copy()
+            item["file"]  = file_path
+            item["page"]  = p_idx
+            recs.append(item)
 
-    df = pd.json_normalize(records, sep="_")
-    if file_path:
-        df["file"] = file_path
-    # 2. Virer les colonnes *entièrement* vides
-    df = df.dropna(how="all", axis=1)
-    # 3. Ne garder que les lignes où au moins un champ du modèle n'est pas null
-    payload_cols = [c for c in df.columns if c not in ("file", "page", "model")]
-    df = df.dropna(subset=payload_cols, how="all")
-    return df.reset_index(drop=True)
+    df = pd.json_normalize(recs, sep="_")
+    df = df.dropna(axis=1, how="all")           # vire colonnes vides
+    df = df.dropna(how="all", subset=df.columns.difference(["file","page","model"]))
+    df["page"] = df["page"].astype(int)
+
+    # ---------- structure “collection” ----------
+    grouped = (
+        df.sort_values(["file","page"])
+          .groupby("file", sort=False)           # garde ordre d'apparition
+          .apply(lambda g: g.to_dict(orient="records"))
+          .reset_index(name="pages")
+          .to_dict(orient="records")
+    )
+    return df, grouped      # ➀ DataFrame plat, ➁ liste groupée

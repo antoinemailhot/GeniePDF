@@ -1,7 +1,7 @@
 from pdf2image import convert_from_path
 import os
 
-def convert_pdf_to_images(pdf_path, dpi=300):
+def convert_pdf_to_images(pdf_path, dpi=300, thread_count=5):
     """
     Convertit un fichier PDF en une liste d'images à partir des pages du PDF.
 
