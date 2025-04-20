@@ -13,6 +13,7 @@ from data_structuring import pandas_processor
 from utils.validator import validate_json
 from utils.config import load_config
 
+
 def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
     selected_files = []
     config = load_config() if config_path is None else load_config(config_path)
@@ -36,13 +37,14 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
     file_frame = ttk.LabelFrame(root, text="Fichiers PDF sélectionnés")
     file_frame.pack(fill="both", expand=True, padx=10, pady=5)
     file_listbox = tk.Listbox(file_frame, height=10)
-    file_listbox.pack(side=tk.LEFT, fill="both", expand=True, padx=(5,0), pady=5)
+    file_listbox.pack(side=tk.LEFT, fill="both", expand=True, padx=(5, 0), pady=5)
     scrollbar = ttk.Scrollbar(file_frame, orient="vertical", command=file_listbox.yview)
     scrollbar.pack(side=tk.RIGHT, fill="y")
     file_listbox.config(yscrollcommand=scrollbar.set)
 
     btn_frame = ttk.Frame(root)
     btn_frame.pack(fill="x", padx=10, pady=5)
+
     def update_listbox():
         file_listbox.delete(0, tk.END)
         for p in selected_files:
@@ -79,30 +81,36 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
     out_frame.pack(fill="x", padx=10, pady=5)
     ttk.Label(out_frame, text="Fichier de sortie :").pack(side=tk.LEFT)
     output_entry = ttk.Entry(out_frame, width=50)
-    output_entry.pack(side=tk.LEFT, padx=(5,0), fill="x", expand=True)
+    output_entry.pack(side=tk.LEFT, padx=(5, 0), fill="x", expand=True)
+
     def choose_output():
         o = filedialog.asksaveasfilename(defaultextension=".json",
                                          filetypes=[("JSON", "*.json")])
         if o:
             output_entry.delete(0, tk.END)
             output_entry.insert(0, o)
+
     ttk.Button(out_frame, text="Parcourir…", command=choose_output).pack(side=tk.LEFT, padx=5)
 
-    # === barre de progression ===
-    status_label = ttk.Label(root, text="")
-    status_label.pack(pady=(5,0))
+    # === barre de progression et statut ===
+    status_label = ttk.Label(root, text="")  # affichera "1/10 – fichier.pdf (10%)"
+    status_label.pack(pady=(5, 0))
     progress = ttk.Progressbar(root, orient="horizontal", mode="determinate")
-    progress.pack(fill="x", padx=10, pady=(0,5))
+    progress.pack(fill="x", padx=10, pady=(0, 5))
 
     # === traitement ===
     def process_data(files):
         dfs = []
         total = len(files)
         for i, pdf in enumerate(files, start=1):
-            # mise à jour progression
-            progress['value'] = (i-1)/total*100
+            # Calcul du pourcentage
+            percent = int((i - 1) / total * 100)
+            # Mise à jour du label et de la barre
+            status_label.config(text=f"{i}/{total} – {os.path.basename(pdf)} ({percent}%)")
+            progress['value'] = percent
             root.update_idletasks()
 
+            # Pipeline d'extraction
             imgs = pdf2image_wrapper.convert_pdf_to_images(pdf)
             imgs = [image_cleaner.preprocess(im) for im in imgs]
             txts = [tesseract_engine.extract_text(im) for im in imgs]
@@ -112,17 +120,21 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
             if not isinstance(df, pd.DataFrame):
                 raise TypeError(f"Extraction pour « {pdf} » n’a pas renvoyé un DataFrame.")
 
-            # ** Injecter le chemin de fichier **
+            # Injecter le chemin du fichier source
             df['file'] = pdf
             dfs.append(df)
 
+        # Dernière mise à jour à 100%
+        status_label.config(text=f"{total}/{total} – terminé (100%)")
+        progress['value'] = 100
+        root.update_idletasks()
+
+        # Agrégation & pré‑nettoyage
         ag = aggregate_results(dfs)
-        # forcer DataFrame
         if isinstance(ag, list):
             ag = pd.concat(ag, ignore_index=True)
         elif not isinstance(ag, pd.DataFrame):
             ag = pd.DataFrame()
-        # pré‑nettoyage
         ag = ag.dropna(how='all').dropna(axis=1, how='all')
         return ag
 
@@ -133,17 +145,16 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
         if not outp:
             return messagebox.showwarning("Avertissement", "Spécifiez un fichier de sortie.")
         start_btn.config(state=tk.DISABLED)
-        status_label.config(text="Traitement…")
+        status_label.config(text="Initialisation…")
         progress['value'] = 0
 
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
-        fut = executor.submit(process_data, list(selected_files))
+        future = executor.submit(process_data, list(selected_files))
 
         def check():
-            if fut.done():
+            if future.done():
                 try:
-                    df = fut.result()
-                    progress['value'] = 100
+                    df = future.result()
                     recs = df.to_dict(orient="records")
                     with open(outp, "w", encoding="utf-8") as f:
                         json.dump(recs, f, indent=2, ensure_ascii=False)
@@ -155,7 +166,6 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
                     messagebox.showerror("Erreur", f"Pendant le traitement : {e}")
                 finally:
                     start_btn.config(state=tk.NORMAL)
-                    status_label.config(text="")
                     executor.shutdown()
             else:
                 root.after(100, check)
