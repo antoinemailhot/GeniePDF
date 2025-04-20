@@ -1,145 +1,124 @@
-# services/regex_parser.py
+# services/regex_parser.py  ──────────────────────────────────────────────
 import re
-from datetime import datetime
 from typing import List, Dict, Any
+FLAGS = re.I | re.S
 
-# ──────────────────── Helpers génériques ────────────────────
-_re_flags = re.IGNORECASE | re.DOTALL    # utile pour les blocs multi‑lignes
-
-def _search_one(txt: str, pat: str, grp: int = 1):
-    m = re.search(pat, txt, _re_flags)
+# ─────────── Helpers ───────────
+def _match(txt: str, pat: str, grp: int = 1):
+    m = re.search(pat, txt, FLAGS)
     return m.group(grp).strip() if m else None
 
-def _bool(val):
-    return bool(val) if isinstance(val, bool) else str(val).lower() in {"yes","true","1"}
+def _b(val) -> bool:
+    return str(val).lower() in {"yes", "true", "1", "y", "oui"}
 
-def _int(val):
+def _i(val):                 # int nullable
     try: return int(val)
     except (TypeError, ValueError): return None
 
-def _float(val):
-    try: return float(val.replace(",", "."))  # gère 12,5 ↔ 12.5
+def _f(val):                 # float nullable
+    try: return float(val.replace(",", "."))
     except (AttributeError, ValueError): return None
 
-# Découpe un texte sur le mot‑clé d’en‑tête (Piece, Tool, …)
 def _split_on(keyword: str, txt: str) -> List[str]:
-    # ex : r'\bPIECE\b' coupe avant chaque occurrence du mot
-    parts = re.split(fr'\b{keyword}\b', txt, flags=_re_flags)
-    # re.split() garde la partie avant la 1ʳᵉ occur ; on l’ignore
+    """Découpe avant chaque mot‑clé : 'PIECE', 'TOOL', 'PROFILE'…"""
+    parts = re.split(fr"\b{keyword}\b", txt, flags=FLAGS)
     return [p for p in parts[1:] if p.strip()]
 
-# ──────────────────── Extracteurs « one » (un seul bloc) ────────────────────
+# ─────────── PIECE ───────────
 def _extract_piece(block: str) -> Dict[str, Any]:
+    txt = block.lower()
     return {
-        "copyNumber": _int   (_search_one(block, r"copy number\s*[:\-]?\s*(\d+)")),
-        "location":   _search_one(block, r"location\s*[:\-]?\s*([\w\-]+)"),
-        "status":     _search_one(block, r"status\s*[:\-]?\s*([\w\-]+)"),
-        "type":       _search_one(block, r"type\s*[:\-]?\s*([\w\-]+)"),
-        "diameter":   _float (_search_one(block, r"diameter\s*[:\-]?\s*([\d.,]+)")),
-        "height":     _float (_search_one(block, r"height\s*[:\-]?\s*([\d.,]+)")),
-        "nitrogen":             _bool("nitrogen"           in block.lower()),
-        "surfaceNitrogen":      _bool("surface nitrogen"   in block.lower()),
-        "toBeManufactured":     _bool("to be manufactured" in block.lower()),
-        "customerCode": _search_one(block, r"customer code\s*[:\-]?\s*([\w\-]+)")
+        "copyNumber"        : _i(_match(block, r"\bcopy\s*#?\s*[:\-]?\s*(\d+)")),
+        "location"          : _match(block, r"\blocation\b\s*[:\-]?\s*([\w\-\/]+)"),
+        "status"            : _match(block, r"\bstatus\b\s*[:\-]?\s*([\w\-]+)"),
+        "type"              : _match(block, r"\btype\b\s*[:\-]?\s*([\w\-]+)"),
+        "diameter"          : _f(_match(block, r"\bdiam(?:eter)?\b\s*[:\-]?\s*([\d.,]+)")),
+        "height"            : _f(_match(block, r"\bheight\b\s*[:\-]?\s*([\d.,]+)")),
+        "nitrogen"          : _b("nitrogen" in txt),
+        "surfaceNitrogen"   : _b("surface nitrogen" in txt),
+        "toBeManufactured"  : _b("to be manufactured" in txt),
+        "customerCode"      : _match(block, r"\bcustomer code\b\s*[:\-]?\s*([\w\-]+)")
     }
 
+def extract_piece(text: str) -> List[Dict[str, Any]]:
+    return [_extract_piece(b) for b in _split_on("PIECE", text)]
+
+# ─────────── TOOL ───────────
+_ASS_TYPES = r"(DBF|DF|DB|BAFF|H2|H3)"
 def _extract_tool(block: str) -> Dict[str, Any]:
+    txt = block.lower()
     return {
-        "assemblyType":  _search_one(block, r"(assembly type|die style)\s*[:\-]?\s*(\w+)"),
-        "pressList":     _search_one(block, r"press\s*[:\-]?\s*([\w ,\-]+)"),
-        "canBeInterlock": _bool("interlock" in block.lower()),
-        "description":    _search_one(block, r"description\s*[:\-]?\s*(.+)"),
-        "displayCode":    _search_one(block, r"display code\s*[:\-]?\s*(\w+)"),
-        "customerCode":   _search_one(block, r"customer code\s*[:\-]?\s*(\w+)"),
-        "totalStack":     _float(_search_one(block, r"total stack\s*[:\-]?\s*([\d.,]+)")),
-        "copyNumber":     _int  (_search_one(block, r"copy number\s*[:\-]?\s*(\d+)"))
+        "assemblyType"   : _match(block, fr"(assembly type|die style)\b\s*[:\-]?\s*{_ASS_TYPES}", 2),
+        "pressList"      : _match(block, r"\bpress(?:es| list)?\b\s*[:\-]?\s*([\w ,;/\-]+)"),
+        "canBeInterlock" : _b("interlock" in txt),
+        "description"    : _match(block, r"\bdescription\b\s*[:\-]?\s*(.+)"),
+        "displayCode"    : _match(block, r"\bdisplay code\b\s*[:\-]?\s*([\w\-]+)"),
+        "customerCode"   : _match(block, r"\bcustomer code\b\s*[:\-]?\s*([\w\-]+)"),
+        "totalStack"     : _f(_match(block, r"\btotal stack\b\s*[:\-]?\s*([\d.,]+)")),
+        "copyNumber"     : _i(_match(block, r"\bcopy\s*#?\s*[:\-]?\s*(\d+)"))
     }
 
-def _extract_profile(block: str) -> Dict[str, Any]:
+def extract_tool(text: str) -> List[Dict[str, Any]]:
+    return [_extract_tool(b) for b in _split_on("TOOL", text)]
+
+# ─────────── CUSTOMER ───────────
+def _extract_customer(block: str) -> Dict[str, Any]:
     return {
-        "customerCodePrefix": _search_one(block, r"customer code prefix\s*[:\-]?\s*(\w+)"),
-        "customerCode":       _search_one(block, r"customer code\s*[:\-]?\s*(\w+)"),
-        "description":        _search_one(block, r"description\s*[:\-]?\s*(.+)"),
-        "creationDate":       _search_one(block, r"(creation date|date)\s*[:\-]?\s*(\d{1,2}/\d{1,2}/\d{4})", 2),
-        "alloy":              _search_one(block, r"alloy\s*[:\-]?\s*(\w+)"),
-        "mandrelQuantity":    _int  (_search_one(block, r"mandrel quantity\s*[:\-]?\s*(\d+)")),
-        "interlock":          _bool("interlock" in block.lower()),
-        "zsc":                _float(_search_one(block, r"zsc\s*[:\-]?\s*([\d.,]+)")),
-        "doubleLayoutAngle":  _float(_search_one(block, r"double layout angle\s*[:\-]?\s*([\d.,]+)")),
-        "hasElectrode":       _bool("electrode"  in block.lower()),
-        "hasMicrofinish":     _bool("microfinish" in block.lower())
+        "nickname"       : _match(block, r"\bnick(?:name)?\b\s*[:\-]?\s*([\w\-]+)"),
+        "phone"          : _match(block, r"\bphone\b\s*[:\-]?\s*([\d ()\-\.]+)"),
+        "billingAddress" : _match(block, r"\bbilling address\b\s*[:\-]?\s*(.+)"),
+        "shippingAddress": _match(block, r"\bshipping address\b\s*[:\-]?\s*(.+)"),
+        "companyName"    : _match(block, r"\bcompany name\b\s*[:\-]?\s*(.+)")
     }
 
-# Requisition & PO restent (généralement) uniques par page → extraction simple
-def extract_requisition(txt: str) -> Dict[str, Any]:
-    return {
-        "requisitionStatus":      _search_one(txt, r"(requisition status|statut)\s*[:\-]?\s*(\w+)"),
-        "description":            _search_one(txt, r"\bdescription\b\s*[:\-]?\s*(.+)"),
-        "receptionDate":          _search_one(txt, r"(reception|delivery) date\s*[:\-]?\s*(\d{1,2}/\d{1,2}/\d{4})", 2),
-        "customerPurchaseNumber": _search_one(txt, r"(PO number|purchase number)\s*[:\-]?\s*(\w+)"),
-        "contact":                _search_one(txt, r"(contact|die maker)\s*[:\-]?\s*(\w+)"),
-        "toolNumber":             _search_one(txt, r"tool number\s*[:\-]?\s*(\w+)"),
-        "doubleLayout":           _bool("double layout" in txt.lower())
-    }
-
-def extract_po(txt: str) -> Dict[str, Any]:
-    # inch/mm dimensions : 120 × 35 ou 120x35
-    dims = re.search(r"(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)", txt, _re_flags)
-    return {
-        "poNumber":  _search_one(txt, r"(PO\s*Number|Num[ée]ro de bon)\s*[:\-]?\s*(\S+)"),
-        "orderDate": _search_one(txt, r"(Order\s*Date|Date\s+de\s+commande)\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})", 2),
-        "vendor":    _search_one(txt, r"(Vendor|Fournisseur)\s*[:\-]?\s*(\S+)"),
-        "partNumber": _search_one(txt, r"(MW[-−]\d+)"),
-        "dimensions": {"width": _float(dims.group(1)), "height": _float(dims.group(2))} if dims else None,
-        "unitPrice":  _float(_search_one(txt, r"(Unit Price|Prix Unitaire).*?([\d,]+\.\d+)")),
-        "totalPrice": _float(_search_one(txt, r"(Total)\s*[:\-]?\s*([\d,]+\.\d+)"))
-    }
-
-# ──────────────────── Extracteurs « multi » ────────────────────
-def extract_piece(txt: str) -> List[Dict[str, Any]]:
-    return [_extract_piece(b) for b in _split_on("PIECE", txt)]
-
-def extract_tool(txt: str) -> List[Dict[str, Any]]:
-    return [_extract_tool(b) for b in _split_on("TOOL", txt)]
-
-def extract_profile(txt: str) -> List[Dict[str, Any]]:
-    return [_extract_profile(b) for b in _split_on("PROFILE", txt)]
-
-def extract_customer(txt: str) -> List[Dict[str, Any]]:
-    # pour l’instant : un seul customer par page
-    bloc = _search_one(txt, r"\bCUSTOMER\b(.+?)(?:\bPROFILE\b|\Z)", 1)
+def extract_customer(text: str) -> List[Dict[str, Any]]:
+    # On considère 1 bloc CUSTOMER par page
+    bloc = _match(text, r"\bCUSTOMER\b(.+?)(?:\bPROFILE\b|\Z)", 1)
     return [_extract_customer(bloc)] if bloc else []
 
-def _extract_customer(block):  # helper privé
+# ─────────── PROFILE ───────────
+def _extract_profile(block: str) -> Dict[str, Any]:
+    txt = block.lower()
     return {
-        "nickname":        _search_one(block, r"nickname\s*[:\-]?\s*(\w+)"),
-        "phone":           _search_one(block, r"phone\s*[:\-]?\s*([\d ()\-\.]+)"),
-        "billingAddress":  _search_one(block, r"billing address\s*[:\-]?\s*(.+)"),
-        "shippingAddress": _search_one(block, r"shipping address\s*[:\-]?\s*(.+)"),
-        "companyName":     _search_one(block, r"company name\s*[:\-]?\s*(.+)")
+        "customerCodePrefix": _match(block, r"\bcustomer code prefix\b\s*[:\-]?\s*([\w\-]+)"),
+        "customerCode"      : _match(block, r"\bcustomer code\b\s*[:\-]?\s*([\w\-]+)"),
+        "description"       : _match(block, r"\bdescription\b\s*[:\-]?\s*(.+)"),
+        "creationDate"      : _match(block, r"\b(creation|date)\b\s*[:\-]?\s*(\d{1,2}/\d{1,2}/\d{4})", 2),
+        "alloy"             : _match(block, r"\balloy\b\s*[:\-]?\s*([\w\-]+)"),
+        "mandrelQuantity"   : _i(_match(block, r"\bmandrel quantity\b\s*[:\-]?\s*(\d+)")),
+        "cavityQuantity"    : _i(_match(block, r"\bcavity quantity\b\s*[:\-]?\s*(\d+)")),
+        "interlock"         : _b("interlock" in txt),
+        "zsc"               : _f(_match(block, r"\bzsc\b\s*[:\-]?\s*([\d.,]+)")),
+        "doubleLayoutAngle" : _f(_match(block, r"\bdouble layout angle\b\s*[:\-]?\s*([\d.,]+)")),
+        "hasElectrode"      : _b("electrode" in txt),
+        "hasMicrofinish"    : _b("microfinish" in txt)
     }
 
-# ──────────────────── Routeur principal ────────────────────
+def extract_profile(text: str) -> List[Dict[str, Any]]:
+    return [_extract_profile(b) for b in _split_on("PROFILE", text)]
+
+# ─────────── REQUISITION ───────────
+def extract_requisition(text: str) -> Dict[str, Any]:
+    txt = text.lower()
+    return {
+        "requisitionStatus"     : _match(text, r"\b(requisition status|statut)\b\s*[:\-]?\s*([\w\-]+)", 2),
+        "description"           : _match(text, r"\bdescription\b\s*[:\-]?\s*(.+)"),
+        "receptionDate"         : _match(text, r"\b(reception|delivery) date\b\s*[:\-]?\s*(\d{1,2}/\d{1,2}/\d{4})", 2),
+        "customerPurchaseNumber": _match(text, r"\b(purchase number|po #?)\b\s*[:\-]?\s*([\w\-]+)", 2),
+        "contact"               : _match(text, r"\b(contact|die maker)\b\s*[:\-]?\s*([A‑Z][\w\s\-]{2,30})", 2),
+        "toolNumber"            : _match(text, r"\btool number\b\s*[:\-]?\s*([\w\-]+)"),
+        "cavityQuantity"        : _i(_match(text, r"\bcavity quantity\b\s*[:\-]?\s*(\d+)")),
+        "doubleLayout"          : _b("double layout" in txt)
+    }
+
+# ─────────── Router principal ───────────
 def extract_data_with_regex(text: str) -> List[Dict[str, Any]]:
-    """
-    Retourne une *liste* d’objets prêts à être transformés en JSON / DataFrame.
-    Chaque élément contient :  
-    • model   → 'piece' | 'tool' | …  
-    • data    → le dict de champs  
-    """
-    results = []
+    results : List[Dict[str,Any]] = []
+    for d in extract_piece(text):    results.append({"model":"piece",    **d})
+    for d in extract_tool(text):     results.append({"model":"tool",     **d})
+    for d in extract_profile(text):  results.append({"model":"profile",  **d})
+    for d in extract_customer(text): results.append({"model":"customer", **d})
 
-    # Modèles possiblement multiples
-    for d in extract_piece(text):    results.append({"model": "piece",    **d})
-    for d in extract_tool(text):     results.append({"model": "tool",     **d})
-    for d in extract_profile(text):  results.append({"model": "profile",  **d})
-    for d in extract_customer(text): results.append({"model": "customer", **d})
-
-    # Modèles uniques
     req = extract_requisition(text)
-    if any(req.values()): results.append({"model": "requisition", **req})
-
-    po  = extract_po(text)
-    if any(po.values()):  results.append({"model": "po", **po})
-
+    if any(req.values()):            results.append({"model":"requisition", **req})
     return results
