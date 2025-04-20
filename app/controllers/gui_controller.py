@@ -101,7 +101,7 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
     # === traitement ===
     def process_data(files):
         dfs = []
-        all_collections = []  # pour JSON final
+        all_collections = [] 
         total = len(files)
         for i, pdf in enumerate(files, start=1):
             # Calcul du pourcentage
@@ -140,10 +140,10 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
         ag = ag.drop_duplicates(subset=["file", "page", "model"])
         # Conversion dict→records sans NaN
         
-        return ag
+        return ag, all_collections
 
     def start():
-        all_collections = []
+        
         outp = output_entry.get().strip()
         if not selected_files:
             return messagebox.showwarning("Avertissement", "Aucun PDF sélectionné.")
@@ -159,7 +159,7 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
         def check():
             if future.done():
                 try:
-                    df = future.result()
+                    df, all_collections = future.result()
                     recs = df.to_dict(orient="records")
                     with open(outp, "w", encoding="utf-8") as f:
                         json.dump(all_collections, f, indent=2, ensure_ascii=False)
