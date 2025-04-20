@@ -85,7 +85,7 @@ def process_pdf(pdf_path):
     processed_images = [image_cleaner.preprocess(img) for img in images]
     texts = [tesseract_engine.extract_text(img) for img in processed_images]
     extracted_data = [extract_data_with_regex(text) for text in texts]
-    structured_data = pandas_processor.structurize(extracted_data)
+    structured_data = pandas_processor.structurize(extracted_data, pdf_path)
     return structured_data
 
 

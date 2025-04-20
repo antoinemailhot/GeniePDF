@@ -115,7 +115,7 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
             imgs = [image_cleaner.preprocess(im) for im in imgs]
             txts = [tesseract_engine.extract_text(im) for im in imgs]
             raws = [extract_data_with_regex(t) for t in txts]
-            df = pandas_processor.structurize(raws)
+            df = pandas_processor.structurize(raws, pdf)
 
             if not isinstance(df, pd.DataFrame):
                 raise TypeError(f"Extraction pour « {pdf} » n’a pas renvoyé un DataFrame.")
@@ -135,7 +135,10 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
             ag = pd.concat(ag, ignore_index=True)
         elif not isinstance(ag, pd.DataFrame):
             ag = pd.DataFrame()
-        ag = ag.dropna(how='all').dropna(axis=1, how='all')
+        # Dé‑duplication stricte
+        ag = ag.drop_duplicates(subset=["file", "page", "model"])
+        # Conversion dict→records sans NaN
+        
         return ag
 
     def start():

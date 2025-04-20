@@ -1,26 +1,26 @@
-# pandas_processor.py
-
+# data_structuring/pandas_processor.py
 import pandas as pd
 
-def structurize(extracted_data):
+def structurize(raw_pages, file_path=None):
     """
-    Structure les données extraites en un DataFrame pandas.
-
-    :param extracted_data: Liste des données extraites de chaque PDF.
-    :return: Un DataFrame pandas structuré avec les données extraites.
+    raw_pages : liste (une entrée par page) de listes/dicts
+    file_path : injecté par gui/CLI
+    Retourne un DataFrame déjà *long* (tidy).
     """
-    # Initialisation d'une liste pour stocker les lignes du DataFrame
-    structured_data = []
+    # 1. On a une liste [ page0_records, page1_records, ... ]
+    records = []
+    for idx, one_page in enumerate(raw_pages, start=1):
+        for rec in one_page:                 # rec = {"model": "...", ...}
+            rec = rec.copy()
+            rec["page"] = idx
+            records.append(rec)
 
-    # Parcours des données extraites (chaque élément dans extracted_data correspond à un PDF)
-    for data in extracted_data:
-        # Chaque 'data' est un dictionnaire ou un format similaire qui peut être converti en ligne
-        # Exemple de structure attendue pour chaque data : {'champ1': valeur1, 'champ2': valeur2, ...}
-        structured_data.append(data)
-
-    # Conversion des données structurées en DataFrame pandas
-    df = pd.DataFrame(structured_data)
-
-    
-
-    return df
+    df = pd.json_normalize(records, sep="_")
+    if file_path:
+        df["file"] = file_path
+    # 2. Virer les colonnes *entièrement* vides
+    df = df.dropna(how="all", axis=1)
+    # 3. Ne garder que les lignes où au moins un champ du modèle n'est pas null
+    payload_cols = [c for c in df.columns if c not in ("file", "page", "model")]
+    df = df.dropna(subset=payload_cols, how="all")
+    return df.reset_index(drop=True)
