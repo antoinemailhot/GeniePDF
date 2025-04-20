@@ -17,22 +17,22 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
     selected_files = []
     config = load_config() if config_path is None else load_config(config_path)
 
-    # Préchargement éventuel du chemin d'entrée
+    # Précharge si on a passé --input
     if input_path:
         if os.path.isdir(input_path):
-            for root_dir, _, files in os.walk(input_path):
-                for f in files:
+            for rd, _, fs in os.walk(input_path):
+                for f in fs:
                     if f.lower().endswith(".pdf"):
-                        path = os.path.join(root_dir, f)
-                        if path not in selected_files:
-                            selected_files.append(path)
+                        p = os.path.join(rd, f)
+                        if p not in selected_files:
+                            selected_files.append(p)
         elif os.path.isfile(input_path) and input_path.lower().endswith(".pdf"):
             selected_files.append(input_path)
 
     root = tk.Tk()
     root.title("GeniePDF - Interface graphique")
 
-    # --- Zone de sélection des fichiers ---
+    # === zone de sélection ===
     file_frame = ttk.LabelFrame(root, text="Fichiers PDF sélectionnés")
     file_frame.pack(fill="both", expand=True, padx=10, pady=5)
     file_listbox = tk.Listbox(file_frame, height=10)
@@ -41,9 +41,8 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
     scrollbar.pack(side=tk.RIGHT, fill="y")
     file_listbox.config(yscrollcommand=scrollbar.set)
 
-    button_frame = ttk.Frame(root)
-    button_frame.pack(fill="x", padx=10, pady=5)
-
+    btn_frame = ttk.Frame(root)
+    btn_frame.pack(fill="x", padx=10, pady=5)
     def update_listbox():
         file_listbox.delete(0, tk.END)
         for p in selected_files:
@@ -66,62 +65,64 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
                             selected_files.append(full)
             update_listbox()
 
-    def remove_selected():
+    def remove_sel():
         for idx in reversed(file_listbox.curselection()):
             selected_files.pop(idx)
         update_listbox()
 
-    ttk.Button(button_frame, text="Ajouter un fichier", command=add_file).pack(side=tk.LEFT)
-    ttk.Button(button_frame, text="Ajouter un dossier", command=add_folder).pack(side=tk.LEFT, padx=5)
-    ttk.Button(button_frame, text="Supprimer sélection", command=remove_selected).pack(side=tk.LEFT)
+    ttk.Button(btn_frame, text="Ajouter un fichier", command=add_file).pack(side=tk.LEFT)
+    ttk.Button(btn_frame, text="Ajouter un dossier", command=add_folder).pack(side=tk.LEFT, padx=5)
+    ttk.Button(btn_frame, text="Supprimer sélection", command=remove_sel).pack(side=tk.LEFT)
 
-    # --- Choix du fichier de sortie ---
-    output_frame = ttk.Frame(root)
-    output_frame.pack(fill="x", padx=10, pady=5)
-    ttk.Label(output_frame, text="Fichier de sortie :").pack(side=tk.LEFT)
-    output_entry = ttk.Entry(output_frame, width=50)
+    # === chemin de sortie ===
+    out_frame = ttk.Frame(root)
+    out_frame.pack(fill="x", padx=10, pady=5)
+    ttk.Label(out_frame, text="Fichier de sortie :").pack(side=tk.LEFT)
+    output_entry = ttk.Entry(out_frame, width=50)
     output_entry.pack(side=tk.LEFT, padx=(5,0), fill="x", expand=True)
     def choose_output():
-        out = filedialog.asksaveasfilename(defaultextension=".json",
-                                           filetypes=[("JSON", "*.json")])
-        if out:
+        o = filedialog.asksaveasfilename(defaultextension=".json",
+                                         filetypes=[("JSON", "*.json")])
+        if o:
             output_entry.delete(0, tk.END)
-            output_entry.insert(0, out)
-    ttk.Button(output_frame, text="Parcourir…", command=choose_output).pack(side=tk.LEFT, padx=5)
+            output_entry.insert(0, o)
+    ttk.Button(out_frame, text="Parcourir…", command=choose_output).pack(side=tk.LEFT, padx=5)
 
-    # --- Barre de progression & statut ---
-    progress_label = ttk.Label(root, text="")
-    progress_label.pack(pady=(5,0))
-    progress_bar = ttk.Progressbar(root, orient="horizontal", mode="determinate")
-    progress_bar.pack(fill="x", padx=10, pady=(0,5))
+    # === barre de progression ===
+    status_label = ttk.Label(root, text="")
+    status_label.pack(pady=(5,0))
+    progress = ttk.Progressbar(root, orient="horizontal", mode="determinate")
+    progress.pack(fill="x", padx=10, pady=(0,5))
 
-    # --- Traitement en arrière‑plan ---
-    def process_data(file_list):
+    # === traitement ===
+    def process_data(files):
         dfs = []
-        total = len(file_list)
-        for i, pdf in enumerate(file_list, 1):
-            # mise à jour du progrès
-            progress_bar['value'] = (i-1)/total*100
+        total = len(files)
+        for i, pdf in enumerate(files, start=1):
+            # mise à jour progression
+            progress['value'] = (i-1)/total*100
             root.update_idletasks()
 
             imgs = pdf2image_wrapper.convert_pdf_to_images(pdf)
-            imgs = [image_cleaner.preprocess(img) for img in imgs]
+            imgs = [image_cleaner.preprocess(im) for im in imgs]
             txts = [tesseract_engine.extract_text(im) for im in imgs]
             raws = [extract_data_with_regex(t) for t in txts]
             df = pandas_processor.structurize(raws)
+
             if not isinstance(df, pd.DataFrame):
-                raise TypeError(f"Le PDF « {pdf} » n’a pas renvoyé un DataFrame.")
+                raise TypeError(f"Extraction pour « {pdf} » n’a pas renvoyé un DataFrame.")
+
+            # ** Injecter le chemin de fichier **
+            df['file'] = pdf
             dfs.append(df)
 
-        # agrégation
         ag = aggregate_results(dfs)
-        # ==== PRÉ-NETTOYAGE OPTIMISÉ ====
-        # s'assurer d'un DataFrame
+        # forcer DataFrame
         if isinstance(ag, list):
             ag = pd.concat(ag, ignore_index=True)
         elif not isinstance(ag, pd.DataFrame):
             ag = pd.DataFrame()
-        # retirer lignes et colonnes vides
+        # pré‑nettoyage
         ag = ag.dropna(how='all').dropna(axis=1, how='all')
         return ag
 
@@ -131,38 +132,38 @@ def launch_gui(config_path=None, input_path=None, output_path=None, workers=5):
             return messagebox.showwarning("Avertissement", "Aucun PDF sélectionné.")
         if not outp:
             return messagebox.showwarning("Avertissement", "Spécifiez un fichier de sortie.")
-        start_button.config(state=tk.DISABLED)
-        progress_label.config(text="Traitement…")
-        progress_bar['value'] = 0
+        start_btn.config(state=tk.DISABLED)
+        status_label.config(text="Traitement…")
+        progress['value'] = 0
 
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
-        future = executor.submit(process_data, list(selected_files))
+        fut = executor.submit(process_data, list(selected_files))
 
         def check():
-            if future.done():
+            if fut.done():
                 try:
-                    df = future.result()
-                    progress_bar['value'] = 100
+                    df = fut.result()
+                    progress['value'] = 100
                     recs = df.to_dict(orient="records")
                     with open(outp, "w", encoding="utf-8") as f:
                         json.dump(recs, f, indent=2, ensure_ascii=False)
                     if validate_json(recs):
-                        messagebox.showinfo("Succès", "Terminé avec succès ! 🎉")
+                        messagebox.showinfo("Succès", "Terminé ! 🎉")
                     else:
                         messagebox.showerror("Erreur", "Validation JSON échouée.")
                 except Exception as e:
                     messagebox.showerror("Erreur", f"Pendant le traitement : {e}")
                 finally:
-                    start_button.config(state=tk.NORMAL)
-                    progress_label.config(text="")
+                    start_btn.config(state=tk.NORMAL)
+                    status_label.config(text="")
                     executor.shutdown()
             else:
                 root.after(100, check)
 
         root.after(100, check)
 
-    start_button = ttk.Button(root, text="Démarrer", command=start)
-    start_button.pack(pady=5)
+    start_btn = ttk.Button(root, text="Démarrer", command=start)
+    start_btn.pack(pady=5)
 
     update_listbox()
     root.mainloop()
